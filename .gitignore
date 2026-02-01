@@ -12,5 +12,6 @@ pnpm-debug.log*
 .env.local
 .env.*
 !.env.example
+PURPOSE.md
 
 /generated/prisma
