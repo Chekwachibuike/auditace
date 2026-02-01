@@ -14,31 +14,46 @@ export function createApp() {
   const app = express();
 
   // Security middleware
-  app.use(helmet());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "http://localhost:3000", "https://localhost:3000", process.env.API_BASE_URL || ""].filter(Boolean)
+      }
+    }
+  }));
   app.use(cors({
     origin: function (origin, callback) {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
-      // Allowed origins for development and production
-      const allowedOrigins = [
+      // In production, be more restrictive
+      if (process.env.NODE_ENV === 'production') {
+        const allowedOrigins = [
         'http://localhost:3000',
         'http://localhost:3001',
         'http://localhost:5173',
         'https://localhost:3000',
         'https://localhost:3001',
         'https://localhost:5173'
-      ];
-      
-      // Add production frontend URL from environment variable
-      if (process.env.FRONTEND_URL) {
-        allowedOrigins.push(process.env.FRONTEND_URL);
-      }
-      
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
+        ];
+        
+        // Add production frontend URL from environment variable
+        if (process.env.FRONTEND_URL) {
+          allowedOrigins.push(process.env.FRONTEND_URL);
+        }
+        
+        if (allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
       } else {
-        callback(new Error('Not allowed by CORS'));
+        // In development, allow all origins
+        callback(null, true);
       }
     },
     credentials: true,
