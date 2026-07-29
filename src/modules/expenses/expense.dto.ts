@@ -1,16 +1,8 @@
-export interface CreateExpenseDto {
-  amount: number;
-  description?: string;
-  category: string;
-  date: string;
-}
+import { z } from 'zod';
+import { createExpenseSchema, updateExpenseSchema } from './expense.validation';
 
-export interface UpdateExpenseDto {
-  amount?: number;
-  description?: string;
-  category?: string;
-  date?: string;
-}
+export type CreateExpenseDto = z.infer<typeof createExpenseSchema>;
+export type UpdateExpenseDto = z.infer<typeof updateExpenseSchema>;
 
 export interface ExpenseFilterDto {
   month?: string; // Format: "2024-01"

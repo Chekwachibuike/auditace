@@ -3,6 +3,7 @@
  import jwt from "jsonwebtoken";
  import { LoginDto, SignupDto } from "./auth.dto";
  import { UserRepository } from "../users/user.repository";
+ import { ConflictError, UnauthorizedError } from "../../shared/AppError";
 
  export class AuthService {
    constructor(private userRepo: UserRepository) {}
@@ -11,7 +12,7 @@
      const existingUser = await this.userRepo.findByEmail(data.email);
 
      if (existingUser) {
-       throw new Error("Email already in use");
+       throw new ConflictError("Email already in use");
      }
 
      const passwordHash = await bcrypt.hash(data.password, 10);
@@ -38,13 +39,13 @@
      const user = await this.userRepo.findByEmail(data.email);
 
      if (!user) {
-       throw new Error("Invalid credentials");
+       throw new UnauthorizedError("Invalid credentials");
      }
 
      const isValid = await bcrypt.compare(data.password, user.passwordHash);
 
      if (!isValid) {
-       throw new Error("Invalid credentials");
+       throw new UnauthorizedError("Invalid credentials");
      }
 
      const token = this.generateToken(user.id);

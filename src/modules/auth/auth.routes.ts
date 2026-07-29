@@ -2,13 +2,11 @@ import { Router } from "express";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { UserRepository } from "../users/user.repository";
+import { asyncHandler } from "../../shared/asyncHandler";
+import { validate } from "../../shared/validate";
+import { signupSchema, loginSchema } from "./auth.validation";
 
 const router = Router();
-
-const asyncHandler =
-  (fn: (req: import("express").Request, res: import("express").Response) => Promise<void>) =>
-  (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) =>
-    Promise.resolve(fn(req, res)).catch(next);
 
 const userRepo = new UserRepository();
 const authService = new AuthService(userRepo);
@@ -53,7 +51,7 @@ const authController = new AuthController(authService);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post("/signup", asyncHandler(authController.signup));
+router.post("/signup", validate(signupSchema), asyncHandler(authController.signup));
 
 /**
  * @swagger
@@ -81,6 +79,6 @@ router.post("/signup", asyncHandler(authController.signup));
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post("/login", asyncHandler(authController.login));
+router.post("/login", validate(loginSchema), asyncHandler(authController.login));
 
 export default router;

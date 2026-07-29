@@ -3,13 +3,11 @@ import { BudgetController } from './budget.controller';
 import { BudgetService } from './budget.service';
 import { BudgetRepository } from './budget.repository';
 import { authenticateToken } from '../../middleware/auth.middleware';
+import { asyncHandler } from '../../shared/asyncHandler';
+import { validate } from '../../shared/validate';
+import { createBudgetSchema, updateBudgetSchema } from './budget.validation';
 
 const router = Router();
-
-const asyncHandler =
-  (fn: (req: import('express').Request, res: import('express').Response) => Promise<void>) =>
-  (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) =>
-    Promise.resolve(fn(req, res)).catch(next);
 
 const budgetRepository = new BudgetRepository();
 const budgetService = new BudgetService(budgetRepository);
@@ -39,7 +37,7 @@ const budgetController = new BudgetController(budgetService);
  *       401:
  *         description: Unauthorized
  */
-router.post('/', authenticateToken, asyncHandler(budgetController.createBudget));
+router.post('/', authenticateToken, validate(createBudgetSchema), asyncHandler(budgetController.createBudget));
 
 /**
  * @swagger
@@ -199,7 +197,7 @@ router.get('/:id/expenses', authenticateToken, asyncHandler(budgetController.get
  *       401:
  *         description: Unauthorized
  */
-router.put('/:id', authenticateToken, asyncHandler(budgetController.updateBudget));
+router.put('/:id', authenticateToken, validate(updateBudgetSchema), asyncHandler(budgetController.updateBudget));
 
 /**
  * @swagger

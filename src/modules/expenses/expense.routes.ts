@@ -3,13 +3,11 @@ import { ExpenseController } from './expense.controller';
 import { ExpenseService } from './expense.service';
 import { ExpenseRepository } from './expense.repository';
 import { authenticateToken } from '../../middleware/auth.middleware';
+import { asyncHandler } from '../../shared/asyncHandler';
+import { validate } from '../../shared/validate';
+import { createExpenseSchema, updateExpenseSchema } from './expense.validation';
 
 const router = Router();
-
-const asyncHandler =
-  (fn: (req: import('express').Request, res: import('express').Response) => Promise<void>) =>
-  (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) =>
-    Promise.resolve(fn(req, res)).catch(next);
 
 const expenseRepository = new ExpenseRepository();
 const expenseService = new ExpenseService(expenseRepository);
@@ -39,7 +37,7 @@ const expenseController = new ExpenseController(expenseService);
  *       401:
  *         description: Unauthorized
  */
-router.post('/', authenticateToken, asyncHandler(expenseController.createExpense));
+router.post('/', authenticateToken, validate(createExpenseSchema), asyncHandler(expenseController.createExpense));
 
 /**
  * @swagger
@@ -172,7 +170,7 @@ router.get('/:id', authenticateToken, asyncHandler(expenseController.getExpense)
  *       401:
  *         description: Unauthorized
  */
-router.put('/:id', authenticateToken, asyncHandler(expenseController.updateExpense));
+router.put('/:id', authenticateToken, validate(updateExpenseSchema), asyncHandler(expenseController.updateExpense));
 
 /**
  * @swagger

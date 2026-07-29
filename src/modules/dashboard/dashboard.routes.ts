@@ -3,13 +3,9 @@ import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 import { DashboardRepository } from './dashboard.repository';
 import { authenticateToken } from '../../middleware/auth.middleware';
+import { asyncHandler } from '../../shared/asyncHandler';
 
 const router = Router();
-
-const asyncHandler =
-  (fn: (req: import('express').Request, res: import('express').Response) => Promise<void>) =>
-  (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) =>
-    Promise.resolve(fn(req, res)).catch(next);
 
 const dashboardRepository = new DashboardRepository();
 const dashboardService = new DashboardService(dashboardRepository);

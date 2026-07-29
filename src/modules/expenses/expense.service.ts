@@ -1,25 +1,18 @@
 import { ExpenseRepository } from './expense.repository';
 import { CreateExpenseDto, UpdateExpenseDto, ExpenseFilterDto } from './expense.dto';
+import { NotFoundError } from '../../shared/AppError';
 
 export class ExpenseService {
   constructor(private expenseRepository: ExpenseRepository) {}
 
   async createExpense(userId: string, data: CreateExpenseDto) {
-    if (data.amount <= 0) {
-      throw new Error('Amount must be greater than 0');
-    }
-
-    if (!data.category.trim()) {
-      throw new Error('Category is required');
-    }
-
     return this.expenseRepository.create(userId, data);
   }
 
   async getExpense(id: string, userId: string) {
     const expense = await this.expenseRepository.findById(id, userId);
     if (!expense) {
-      throw new Error('Expense not found');
+      throw new NotFoundError('Expense not found');
     }
     return expense;
   }
@@ -31,15 +24,7 @@ export class ExpenseService {
   async updateExpense(id: string, userId: string, data: UpdateExpenseDto) {
     const existingExpense = await this.expenseRepository.findById(id, userId);
     if (!existingExpense) {
-      throw new Error('Expense not found');
-    }
-
-    if (data.amount !== undefined && data.amount <= 0) {
-      throw new Error('Amount must be greater than 0');
-    }
-
-    if (data.category !== undefined && !data.category.trim()) {
-      throw new Error('Category cannot be empty');
+      throw new NotFoundError('Expense not found');
     }
 
     return this.expenseRepository.update(id, userId, data);
@@ -48,7 +33,7 @@ export class ExpenseService {
   async deleteExpense(id: string, userId: string) {
     const existingExpense = await this.expenseRepository.findById(id, userId);
     if (!existingExpense) {
-      throw new Error('Expense not found');
+      throw new NotFoundError('Expense not found');
     }
 
     return this.expenseRepository.delete(id, userId);

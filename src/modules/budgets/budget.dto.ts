@@ -1,20 +1,8 @@
-export interface CreateBudgetDto {
-  name: string;
-  amount: number;
-  category?: string;
-  period: 'monthly' | 'weekly' | 'yearly';
-  startDate: string;
-  endDate: string;
-}
+import { z } from 'zod';
+import { createBudgetSchema, updateBudgetSchema } from './budget.validation';
 
-export interface UpdateBudgetDto {
-  name?: string;
-  amount?: number;
-  category?: string;
-  period?: 'monthly' | 'weekly' | 'yearly';
-  startDate?: string;
-  endDate?: string;
-}
+export type CreateBudgetDto = z.infer<typeof createBudgetSchema>;
+export type UpdateBudgetDto = z.infer<typeof updateBudgetSchema>;
 
 export interface BudgetFilterDto {
   category?: string;

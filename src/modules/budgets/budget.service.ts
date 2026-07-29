@@ -1,28 +1,15 @@
 import { BudgetRepository } from './budget.repository';
 import { CreateBudgetDto, UpdateBudgetDto, BudgetFilterDto } from './budget.dto';
+import { NotFoundError, ConflictError, ForbiddenError } from '../../shared/AppError';
 
 export class BudgetService {
   constructor(private budgetRepository: BudgetRepository) {}
 
   async createBudget(userId: string, data: CreateBudgetDto) {
-    if (data.amount <= 0) {
-      throw new Error('Budget amount must be greater than 0');
-    }
-
-    if (!data.name.trim()) {
-      throw new Error('Budget name is required');
-    }
-
-    if (!['monthly', 'weekly', 'yearly'].includes(data.period)) {
-      throw new Error('Invalid period. Must be monthly, weekly, or yearly');
-    }
-
+    // amount/name/period/date-order are enforced by createBudgetSchema at
+    // the route boundary; only genuine business-rule checks remain here.
     const startDate = new Date(data.startDate);
     const endDate = new Date(data.endDate);
-
-    if (startDate >= endDate) {
-      throw new Error('Start date must be before end date');
-    }
 
     // Check for duplicate budget in same period
     const existingBudget = await this.budgetRepository.findByCategoryAndPeriod(
@@ -34,7 +21,7 @@ export class BudgetService {
     );
 
     if (existingBudget) {
-      throw new Error(`Budget already exists for this ${data.period} period and category`);
+      throw new ConflictError(`Budget already exists for this ${data.period} period and category`);
     }
 
     return this.budgetRepository.create(userId, data);
@@ -43,7 +30,7 @@ export class BudgetService {
   async getBudget(id: string, userId: string) {
     const budget = await this.budgetRepository.findById(id, userId);
     if (!budget) {
-      throw new Error('Budget not found');
+      throw new NotFoundError('Budget not found');
     }
     return budget;
   }
@@ -55,25 +42,13 @@ export class BudgetService {
   async updateBudget(id: string, userId: string, data: UpdateBudgetDto) {
     const existingBudget = await this.budgetRepository.findById(id, userId);
     if (!existingBudget) {
-      throw new Error('Budget not found');
+      throw new NotFoundError('Budget not found');
     }
 
     // Check if budget period has already started - if so, prevent editing
     const now = new Date();
     if (existingBudget.startDate <= now) {
-      throw new Error('Cannot edit budget once the period has started');
-    }
-
-    if (data.amount !== undefined && data.amount <= 0) {
-      throw new Error('Budget amount must be greater than 0');
-    }
-
-    if (data.name !== undefined && !data.name.trim()) {
-      throw new Error('Budget name cannot be empty');
-    }
-
-    if (data.period !== undefined && !['monthly', 'weekly', 'yearly'].includes(data.period)) {
-      throw new Error('Invalid period. Must be monthly, weekly, or yearly');
+      throw new ForbiddenError('Cannot edit budget once the period has started');
     }
 
     if (data.startDate || data.endDate) {
@@ -81,7 +56,7 @@ export class BudgetService {
       const endDate = data.endDate ? new Date(data.endDate) : existingBudget.endDate;
 
       if (startDate >= endDate) {
-        throw new Error('Start date must be before end date');
+        throw new ConflictError('Start date must be before end date');
       }
 
       // Check for conflicts with other budgets
@@ -94,7 +69,7 @@ export class BudgetService {
       );
 
       if (conflictBudget && conflictBudget.id !== id) {
-        throw new Error(`Another budget exists for this period and category`);
+        throw new ConflictError(`Another budget exists for this period and category`);
       }
     }
 
@@ -104,7 +79,7 @@ export class BudgetService {
   async deleteBudget(id: string, userId: string) {
     const existingBudget = await this.budgetRepository.findById(id, userId);
     if (!existingBudget) {
-      throw new Error('Budget not found');
+      throw new NotFoundError('Budget not found');
     }
 
     // Allow deletion even if period has started (user discretion)
