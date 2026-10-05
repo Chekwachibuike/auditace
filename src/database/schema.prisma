@@ -19,8 +19,11 @@ model User {
   updatedAt    DateTime @updatedAt
 
   // Relations for future features
-  expenses     Expense[]
-  budgets      Budget[]
+  expenses Expense[]
+  budgets  Budget[]
+
+  linkedAccounts       LinkedAccount[]
+  importedTransactions ImportedTransaction[]
 
   @@map("users")
 }
@@ -34,25 +37,143 @@ model Expense {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  /// "manual" when a person typed it in, "imported" when it was created from a
+  /// linked bank transaction. Kept denormalised so the UI can label a row
+  /// without joining, and so we can measure how much of a month was captured
+  /// automatically versus by hand.
+  source String @default("manual")
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  importedTransaction ImportedTransaction?
 
   @@map("expenses")
 }
 
 model Budget {
-  id          String   @id @default(cuid())
-  name        String
-  amount      Float
-  category    String?
-  period      String   // monthly, weekly, yearly
-  startDate   DateTime
-  endDate     DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  amount    Float
+  category  String?
+  period    String // monthly, weekly, yearly
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("budgets")
+}
+
+/// A bank account the user has connected through Mono Connect.
+///
+/// One row per linked account, not per bank: a user can link several accounts
+/// at the same institution.
+model LinkedAccount {
+  id String @id @default(cuid())
+
+  /// Mono's persistent account id, obtained by exchanging the Connect `code`.
+  /// Unique globally because Mono ids are globally unique, which also stops the
+  /// same account being linked twice under different users.
+  monoAccountId String @unique
+
+  institution String
+  accountName String?
+
+  /// Last few digits only. A full account number buys us nothing and turns this
+  /// table into something worth stealing.
+  accountNumberMask String?
+
+  currency String @default("NGN")
+
+  /// active | reauth_required | unlinked
+  /// Bank consents expire, and Mono reports that out-of-band. The UI needs to be
+  /// able to show "reconnect this account" rather than silently going stale.
+  status String @default("active")
+
+  lastSyncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions ImportedTransaction[]
+
+  @@index([userId])
+  @@map("linked_accounts")
+}
+
+/// A transaction as it arrived from the bank, before anyone decided what it
+/// means.
+///
+/// This is deliberately NOT an Expense. A bank feed contains credits (salary,
+/// refunds) and transfers between the user's own accounts; writing it straight
+/// into `expenses` would inflate every total, budget and chart in the app.
+/// Rows land here as `pending` and only become an Expense when accepted.
+model ImportedTransaction {
+  id String @id @default(cuid())
+
+  /// Where this row came from: "mono" | "statement" | "email".
+  /// Kept explicit rather than inferred from which foreign key is set, because
+  /// the dedupe key below is only unique *within* a source — two providers can
+  /// legitimately use the same id string for different transactions.
+  source String @default("mono")
+
+  /// The source's own id for this transaction. Mono's transaction id, a hash of
+  /// a statement row, a message id — whatever makes the row identifiable in the
+  /// system it came from.
+  ///
+  /// The @@unique([userId, source, externalId]) below is the entire dedupe
+  /// strategy: re-importing an overlapping window collides on that constraint
+  /// instead of duplicating the feed.
+  externalId String
+
+  /// MAJOR units (naira), already divided down from the kobo Mono returns.
+  /// The conversion happens once, at the API boundary, so nothing downstream
+  /// has to remember which unit it is holding.
+  amount Float
+
+  currency  String @default("NGN")
+  narration String
+
+  /// "debit" | "credit". Only debits are candidate expenses.
+  type String
+
+  date    DateTime
+  balance Float?
+
+  /// A category suggested by the source, when it offers one (Mono's
+  /// categorisation, for instance). Null until/unless that resolves, so never
+  /// assume it is present.
+  suggestedCategory String?
+
+  /// pending | accepted | ignored
+  status String @default("pending")
+
+  /// Set once accepted. SetNull rather than Cascade: deleting the expense
+  /// should not destroy the record that the bank transaction was seen, or the
+  /// next sync would import it again as if it were new.
+  expenseId String?  @unique
+  expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  /// Optional: a statement upload or a parsed alert email has no linked
+  /// account behind it. Only rows that came from a live connection carry one.
+  linkedAccountId String?
+  linkedAccount   LinkedAccount? @relation(fields: [linkedAccountId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, source, externalId])
+  @@index([userId, status])
+  @@index([linkedAccountId])
+  @@map("imported_transactions")
 }

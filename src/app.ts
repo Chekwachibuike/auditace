@@ -9,6 +9,7 @@ import userRoutes from "./modules/users/user.routes";
 import expenseRoutes from "./modules/expenses/expense.routes";
 import budgetRoutes from "./modules/budgets/budget.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
+import integrationRoutes from "./modules/integrations/integration.routes";
 import { AppError } from "./shared/AppError";
 
 // express-rate-limit's default `message` option is sent as-is via res.send(),
@@ -73,7 +74,12 @@ export function createApp() {
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // limit each IP to 100 requests per windowMs
-    handler: jsonRateLimitHandler('Too many requests from this IP, please try again later.')
+    handler: jsonRateLimitHandler('Too many requests from this IP, please try again later.'),
+    // Mono's webhooks all arrive from a small set of their IPs, so a busy
+    // account's events would otherwise burn through one shared bucket and get
+    // 429'd. A rate-limited webhook is a dropped (or endlessly retried) event,
+    // and the endpoint has its own shared-secret gate, so it opts out here.
+    skip: (req: Request) => req.path === '/integrations/mono/webhook'
   });
   app.use(limiter);
 
@@ -116,6 +122,7 @@ app.get("/health", (_req: Request, res: Response) => {
   app.use("/expenses", expenseRoutes);
   app.use("/budgets", budgetRoutes);
   app.use("/dashboard", dashboardRoutes);
+  app.use("/integrations", integrationRoutes);
 
   // Catch-all for undefined routes. Without this, unmatched requests fall
   // through to Express's default handler, which returns bare HTML ("Cannot
