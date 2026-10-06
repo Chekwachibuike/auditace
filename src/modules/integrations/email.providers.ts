@@ -112,20 +112,53 @@ export function normaliseInboundEmail(payload: Payload): NormalisedEmail | null 
   const receivedAt =
     parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : new Date();
 
-  return { messageId, from, to, subject, text: text.trim(), receivedAt };
+  const mailboxHash = firstString(payload, ['MailboxHash', 'mailboxHash', 'mailbox_hash']);
+
+  return { messageId, from, to, subject, text: text.trim(), receivedAt, mailboxHash };
 }
 
 /**
  * Pull the user's ingest token out of the recipient address.
  *
- * `aa-9f3c2b@ingest.example.com` -> `9f3c2b`
- * Plus-addressing (`aa-9f3c2b+anything@…`) is tolerated because some forwarders
- * add their own suffix.
+ * TWO schemes are accepted, because which one is available depends on whether
+ * the operator owns a domain:
+ *
+ *   1. OWN DOMAIN — `aa-9f3c2b…@ingest.example.com`
+ *      The token is the local part after the configured prefix.
+ *
+ *   2. SHARED PROVIDER ADDRESS — `abc123+9f3c2b…@inbound.postmarkapp.com`
+ *      Services like Postmark and CloudMailin hand out one fixed address on a
+ *      domain you do not control, so the local part cannot be per-user. Plus
+ *      addressing carries the token instead; Postmark even splits it out as
+ *      `MailboxHash`. This is what lets the whole feature run with no domain
+ *      purchase at all.
+ *
+ * Supporting both means moving from a free provider address to a custom domain
+ * later is a configuration change, not a code change.
+ *
+ * `mailboxHash` is read first when the provider supplies it, since that is the
+ * provider's own parse and more reliable than re-splitting the string.
  */
-export function extractIngestToken(toAddress: string): string | null {
-  const prefix = (process.env.EMAIL_INGEST_PREFIX || 'aa-').toLowerCase();
+export function extractIngestToken(toAddress: string, mailboxHash?: string): string | null {
+  const direct = (mailboxHash ?? '').trim().toLowerCase();
+  if (direct.length >= 6) return direct;
+
   const local = toAddress.split('@')[0]?.toLowerCase() ?? '';
-  if (!local.startsWith(prefix)) return null;
-  const token = local.slice(prefix.length).split('+')[0];
-  return token.length >= 6 ? token : null;
+  if (!local) return null;
+
+  // Scheme 2: anything after the first '+'.
+  const plus = local.indexOf('+');
+  if (plus > -1) {
+    const tagged = local.slice(plus + 1);
+    if (tagged.length >= 6) return tagged;
+  }
+
+  // Scheme 1: the configured prefix.
+  const prefix = (process.env.EMAIL_INGEST_PREFIX || 'aa-').toLowerCase();
+  if (local.startsWith(prefix)) {
+    const token = local.slice(prefix.length).split('+')[0];
+    if (token.length >= 6) return token;
+  }
+
+  return null;
 }

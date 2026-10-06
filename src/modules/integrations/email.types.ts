@@ -19,6 +19,11 @@ export interface NormalisedEmail {
   from: string;
   /** The address it was sent TO — carries the user's ingest token. */
   to: string;
+  /**
+   * The provider's own parse of the `+tag` portion, when it offers one
+   * (Postmark calls this MailboxHash). Preferred over re-splitting `to`.
+   */
+  mailboxHash?: string;
   subject: string;
   /** Plain text. HTML-only mail is converted before it gets here. */
   text: string;
