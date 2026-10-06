@@ -1,0 +1,59 @@
+06-10-2026 12:07:45
+
+ 
+
+Dear ADA EXAMPLE CUSTOMER
+
+ 
+
+We wish to inform you that a Credit transaction recently occurred on your bank account.
+
+
+Please find below details of the transaction:
+
+
+Transaction Details - Credit
+
+Account Number
+
+:
+
+0100****99
+
+Account Name
+
+:
+
+ADA EXAMPLE CUSTOMER
+
+Description
+
+:
+
+NIP:EXAMPLE SCHOOLS LTD-REFG98ECOT262790492 BO EXMP
+
+Reference Number
+
+:
+
+S11663426
+
+Transaction Amount
+
+:
+
+12,000.00 NGN
+
+Transaction Date & Time:
+
+:
+
+06-10-2026 12:07:45
+
+Value Date:
+
+:
+
+06-10-2026
+
+Current Balance as at 06-10-2026 12:07:45      :              13,237.23 NGN

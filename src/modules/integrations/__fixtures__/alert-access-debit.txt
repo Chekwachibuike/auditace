@@ -1,0 +1,13 @@
+alt_text
+Dear ADA EXAMPLE CUSTOMER,
+Your account has been Debited
+NGN 2,000.00
+Transaction Summary
+A/C Number	0100****99
+Account Name	ADA EXAMPLE CUSTOMER
+Description	MOBILE TRF TO PAY/ /Chidi Example
+Reference Number	247AMHY2627800nP
+Transaction Branch	COVENANT BRANCH
+Transaction Date	05-Oct-2026
+Value Date	05-Oct-2026
+Available Balance	19,690.63

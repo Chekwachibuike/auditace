@@ -11,12 +11,17 @@ import {
   linkAccountSchema,
   syncAccountSchema,
 } from './integration.validation';
+import { EmailIngestService } from './email.service';
+import { EmailController } from './email.controller';
 
 const router = Router();
 
 const integrationRepository = new IntegrationRepository();
 const integrationService = new IntegrationService(integrationRepository);
 const integrationController = new IntegrationController(integrationService);
+
+const emailService = new EmailIngestService(integrationRepository);
+const emailController = new EmailController(emailService);
 
 /**
  * Gate the webhook on a shared secret.
@@ -285,5 +290,114 @@ router.post(
  *         description: Invalid webhook secret
  */
 router.post('/mono/webhook', verifyWebhookSecret, asyncHandler(integrationController.handleWebhook));
+
+/* ---- Forwarded bank alerts ---------------------------------------------- */
+
+/**
+ * @swagger
+ * /integrations/email/address:
+ *   get:
+ *     summary: This user's personal alert-forwarding address
+ *     description: >
+ *       Minted on first call. Forward bank alerts here with a Gmail filter.
+ *       The address is a bearer secret - anyone holding it can deliver mail to
+ *       this account's review queue.
+ *     tags: [Integrations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: The ingest address
+ */
+router.get('/email/address', authenticateToken, asyncHandler(emailController.getIngestAddress));
+
+/**
+ * @swagger
+ * /integrations/email/address/rotate:
+ *   post:
+ *     summary: Issue a new forwarding address, invalidating the old one
+ *     tags: [Integrations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: The new ingest address
+ */
+router.post(
+  '/email/address/rotate',
+  authenticateToken,
+  asyncHandler(emailController.rotateIngestAddress),
+);
+
+/**
+ * @swagger
+ * /integrations/email/messages:
+ *   get:
+ *     summary: Inbound alert emails, including ones no parser could read
+ *     tags: [Integrations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, parsed, unparsed, ignored, all]
+ *     responses:
+ *       200:
+ *         description: Inbound emails
+ */
+router.get('/email/messages', authenticateToken, asyncHandler(emailController.listEmails));
+
+/**
+ * @swagger
+ * /integrations/email/senders:
+ *   get:
+ *     summary: Distinct senders seen, with counts
+ *     description: >
+ *       Provenance for the UI, not a filter. Senders are never used to decide
+ *       whether an email is processed.
+ *     tags: [Integrations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Senders
+ */
+router.get('/email/senders', authenticateToken, asyncHandler(emailController.listSenders));
+
+/**
+ * @swagger
+ * /integrations/email/reparse:
+ *   post:
+ *     summary: Re-run parsers over previously unreadable emails
+ *     description: Use after a parser is fixed or a new bank format is added.
+ *     tags: [Integrations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: How many were re-read
+ */
+router.post('/email/reparse', authenticateToken, asyncHandler(emailController.reparse));
+
+/**
+ * @swagger
+ * /integrations/email/inbound:
+ *   post:
+ *     summary: Inbound webhook for the email provider
+ *     description: >
+ *       Authenticated by the secret token in the recipient address rather than
+ *       by a bearer token, since the caller is a mail provider. Accepts the
+ *       payload shapes of Cloudflare Email Routing, SendGrid Inbound Parse and
+ *       Postmark.
+ *     tags: [Integrations]
+ *     responses:
+ *       200:
+ *         description: Outcome (parsed, unparsed, duplicate or ignored)
+ *       422:
+ *         description: Payload could not be read as an email
+ */
+router.post('/email/inbound', asyncHandler(emailController.ingest));
 
 export default router;
