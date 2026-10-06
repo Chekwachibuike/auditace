@@ -57,12 +57,32 @@ export class EmailIngestService {
       await prisma.user.update({ where: { id: userId }, data: { ingestToken: token } });
     }
 
+    // Two deployment shapes, so this works with or without owning a domain.
+    //
+    // EMAIL_INGEST_BASE_ADDRESS is the free path: paste the fixed address a
+    // provider gave you (e.g. abc123@inbound.postmarkapp.com) and each user
+    // gets a plus-addressed variant of it. EMAIL_INGEST_DOMAIN is the custom
+    // domain path. Base address wins when both are set, since it is the more
+    // specific instruction.
+    const base = process.env.EMAIL_INGEST_BASE_ADDRESS;
+    if (base && base.includes('@')) {
+      const [local, domain] = base.split('@');
+      return {
+        address: `${local}+${token}@${domain}`,
+        mode: 'shared' as const,
+        configured: true,
+      };
+    }
+
     const prefix = process.env.EMAIL_INGEST_PREFIX || 'aa-';
-    const domain = process.env.EMAIL_INGEST_DOMAIN || 'ingest.example.com';
+    const domain = process.env.EMAIL_INGEST_DOMAIN;
 
     return {
-      address: `${prefix}${token}@${domain}`,
-      configured: Boolean(process.env.EMAIL_INGEST_DOMAIN),
+      address: `${prefix}${token}@${domain || 'ingest.example.com'}`,
+      mode: 'domain' as const,
+      // False means the address shown is a placeholder: mail sent to it will go
+      // nowhere until an inbound provider is pointed at this endpoint.
+      configured: Boolean(domain),
     };
   }
 
@@ -86,7 +106,7 @@ export class EmailIngestService {
       throw new AppError('Could not read the inbound email payload.', 422);
     }
 
-    const token = extractIngestToken(email.to);
+    const token = extractIngestToken(email.to, email.mailboxHash);
     if (!token) {
       // Not addressed to an ingest mailbox at all. Accepted and discarded
       // rather than errored: the sender is a mail provider retrying a bounce,
