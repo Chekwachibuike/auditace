@@ -79,7 +79,9 @@ export function createApp() {
     // account's events would otherwise burn through one shared bucket and get
     // 429'd. A rate-limited webhook is a dropped (or endlessly retried) event,
     // and the endpoint has its own shared-secret gate, so it opts out here.
-    skip: (req: Request) => req.path === '/integrations/mono/webhook'
+    skip: (req: Request) =>
+      req.path === '/integrations/mono/webhook' ||
+      req.path === '/integrations/email/inbound'
   });
   app.use(limiter);
 

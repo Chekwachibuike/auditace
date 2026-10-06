@@ -22,8 +22,16 @@ model User {
   expenses Expense[]
   budgets  Budget[]
 
+  /// The opaque token in this user's personal forwarding address
+  /// (e.g. aa-<token>@ingest.example.com). An inbound email carries no session,
+  /// so the recipient address is the only thing that says whose it is.
+  /// Nullable because it is minted on first use, not at signup; unique because
+  /// a collision would route someone's bank alerts into another account.
+  ingestToken String? @unique
+
   linkedAccounts       LinkedAccount[]
   importedTransactions ImportedTransaction[]
+  inboundEmails        InboundEmail[]
 
   @@map("users")
 }
@@ -176,4 +184,47 @@ model ImportedTransaction {
   @@index([userId, status])
   @@index([linkedAccountId])
   @@map("imported_transactions")
+}
+
+/// A bank alert email exactly as it arrived, kept whether or not we could read
+/// it.
+///
+/// Storing the raw message is the point. Bank alert formats vary per bank and
+/// change without notice, so a parser WILL fail on something eventually. If an
+/// unparsed email were dropped the spend would be silently missing and nobody
+/// would know; kept here, it shows up as "couldn't read this one" and the
+/// parser can be fixed and re-run over everything already received.
+model InboundEmail {
+  id String @id @default(cuid())
+
+  /// The message's own id, used for dedupe. Falls back to a content hash when
+  /// the header is missing or rewritten in transit — forwarding rules do not
+  /// always preserve Message-ID, and without a stable key a re-delivery would
+  /// import the same spend twice.
+  messageId String
+
+  fromAddress String
+  toAddress   String
+  subject     String
+  receivedAt  DateTime
+
+  /// Plain-text body. Kept so a failed parse can be re-run later.
+  bodyText String
+
+  /// pending | parsed | unparsed | ignored
+  /// `unparsed` means it arrived but no parser recognised it — a to-do, not a
+  /// failure to hide.
+  status     String  @default("pending")
+  parserName String?
+  parseError String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, messageId])
+  @@index([userId, status])
+  @@map("inbound_emails")
 }
