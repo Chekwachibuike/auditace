@@ -27,6 +27,22 @@ export class EmailController {
     res.status(200).json(await this.service.listSenders(req.user.id));
   };
 
+  status = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    if (!req.user) throw new UnauthorizedError('User not authenticated');
+    const [address, discarded] = await Promise.all([
+      this.service.getIngestAddress(req.user.id),
+      this.service.countDiscarded(req.user.id),
+    ]);
+    const messages = await this.service.listEmails(req.user.id);
+    res.status(200).json({
+      ...address,
+      received: messages.length,
+      parsed: messages.filter((m) => m.status === 'parsed').length,
+      unparsed: messages.filter((m) => m.status === 'unparsed').length,
+      discarded,
+    });
+  };
+
   reparse = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     if (!req.user) throw new UnauthorizedError('User not authenticated');
     res.status(200).json(await this.service.reparseUnparsed(req.user.id));

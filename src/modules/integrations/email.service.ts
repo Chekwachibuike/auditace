@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import { prisma } from '../../database/prisma';
 import { IntegrationRepository } from './integration.repository';
-import { dispatch } from './email.parsers';
+import { BANK_PARSERS, dispatch } from './email.parsers';
 import { extractIngestToken, normaliseInboundEmail } from './email.providers';
 import { AppError, NotFoundError } from '../../shared/AppError';
 import type { IngestResult, NormalisedEmail } from './email.types';
@@ -133,10 +133,23 @@ export class EmailIngestService {
     return this.processForUser(user.id, email);
   }
 
+  /**
+   * Does this message plausibly concern money?
+   *
+   * Used to decide whether the BODY is worth keeping. It is deliberately
+   * looser than any parser's own `matches`: a bank we have never seen should
+   * still get its body stored so the format can be read and supported, which is
+   * the opposite of the privacy rule below and has to win for genuine alerts.
+   */
+  private looksFinancial(email: NormalisedEmail): boolean {
+    if (BANK_PARSERS.some((p) => p.matches(email))) return true;
+    const t = `${email.subject}\n${email.text}`;
+    const money = /\b(?:NGN|USD|GBP|EUR|₦)\s*[\d,]+|[\d,]+\.\d{2}\s*(?:NGN|USD|GBP|EUR)\b/i;
+    const banking = /\b(debit|credit|transaction|withdraw|deposit|balance|account)\b/i;
+    return money.test(t) && banking.test(t);
+  }
+
   private async processForUser(userId: string, email: NormalisedEmail): Promise<IngestResult> {
-    // Store the raw message FIRST, before attempting to understand it. A parser
-    // that cannot read an alert must still leave evidence behind — otherwise
-    // the spend is silently missing and nobody can tell that anything was lost.
     const existing = await prisma.inboundEmail.findUnique({
       where: { userId_messageId: { userId, messageId: email.messageId } },
     });
@@ -144,6 +157,47 @@ export class EmailIngestService {
       return { status: 'duplicate', reason: 'This email has already been received' };
     }
 
+    // PRIVACY GUARD.
+    //
+    // Forwarded mail is stored in full so a failed parse can be re-read later.
+    // That is right for a bank alert and badly wrong for everything else: if
+    // someone sets Gmail's blanket "forward a copy of incoming mail" instead of
+    // a filter — an easy mistake, the controls sit next to each other — every
+    // personal email would be written to this table in plain text.
+    //
+    // So the body is only retained when the message either looks financial or
+    // comes from a sender that has produced a successful parse before. Anything
+    // else is recorded as `discarded` with its sender and subject but NO body,
+    // which keeps enough to warn the user that their filter is too broad while
+    // retaining nothing private.
+    const senderIsKnown =
+      (await prisma.inboundEmail.count({
+        where: { userId, fromAddress: email.from, status: 'parsed' },
+      })) > 0;
+
+    if (!senderIsKnown && !this.looksFinancial(email)) {
+      await prisma.inboundEmail.create({
+        data: {
+          userId,
+          messageId: email.messageId,
+          fromAddress: email.from,
+          toAddress: email.to,
+          subject: email.subject,
+          receivedAt: email.receivedAt,
+          bodyText: '',
+          status: 'discarded',
+          parseError: 'Not a bank alert - body not stored',
+        },
+      });
+      return {
+        status: 'ignored',
+        reason: 'Not a bank alert; body discarded. Check your Gmail filter is not forwarding all mail.',
+      };
+    }
+
+    // Store the raw message BEFORE attempting to understand it. A parser that
+    // cannot read an alert must still leave evidence behind — otherwise the
+    // spend is silently missing and nobody can tell anything was lost.
     const stored = await prisma.inboundEmail.create({
       data: {
         userId,
@@ -240,6 +294,16 @@ export class EmailIngestService {
       else results.stillUnparsed += 1;
     }
     return results;
+  }
+
+  /**
+   * How many non-bank emails have been discarded.
+   *
+   * The UI uses this to say "your Gmail filter looks too broad" — the single
+   * most likely setup mistake, and invisible otherwise.
+   */
+  async countDiscarded(userId: string) {
+    return prisma.inboundEmail.count({ where: { userId, status: 'discarded' } });
   }
 
   /** Inbound emails, newest first — the "couldn't read these" list for the UI. */

@@ -351,6 +351,24 @@ router.get('/email/messages', authenticateToken, asyncHandler(emailController.li
 
 /**
  * @swagger
+ * /integrations/email/status:
+ *   get:
+ *     summary: Forwarding address plus a summary of what has arrived
+ *     description: >
+ *       `discarded` counts non-bank mail whose body was deliberately not
+ *       stored - a non-zero value means the user's Gmail filter is forwarding
+ *       more than their bank alerts.
+ *     tags: [Integrations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Status summary
+ */
+router.get('/email/status', authenticateToken, asyncHandler(emailController.status));
+
+/**
+ * @swagger
  * /integrations/email/senders:
  *   get:
  *     summary: Distinct senders seen, with counts
