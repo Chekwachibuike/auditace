@@ -64,8 +64,19 @@ export class EmailIngestService {
     // gets a plus-addressed variant of it. EMAIL_INGEST_DOMAIN is the custom
     // domain path. Base address wins when both are set, since it is the more
     // specific instruction.
-    const base = process.env.EMAIL_INGEST_BASE_ADDRESS;
-    if (base && base.includes('@')) {
+    // Exactly one '@' required. A value pasted twice
+    // ("a@host.coma@host.com") still "includes an @", and splitting it yields a
+    // domain of "host.coma@host.com" — producing an address that looks almost
+    // right and silently delivers nowhere. Seen in the wild during setup, so it
+    // is rejected rather than half-honoured.
+    const base = process.env.EMAIL_INGEST_BASE_ADDRESS?.trim();
+    if (base && (base.match(/@/g) || []).length !== 1) {
+      throw new AppError(
+        'EMAIL_INGEST_BASE_ADDRESS is malformed - it must be a single email address.',
+        500,
+      );
+    }
+    if (base) {
       const [local, domain] = base.split('@');
       return {
         address: `${local}+${token}@${domain}`,
