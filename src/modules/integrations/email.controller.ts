@@ -35,25 +35,40 @@ export class EmailController {
   /**
    * Inbound webhook from the email provider.
    *
-   * Answers 200 for anything it understood well enough to make a decision
-   * about — including "ignored" and "unparsed". A mail provider reads a non-2xx
-   * as "retry", and retrying an email we will never be able to route (wrong
-   * recipient, unknown account) just generates noise forever. Only a payload we
-   * genuinely could not read gets a 4xx.
+   * The status code is a RETRY INSTRUCTION, not decoration. Postmark retries
+   * any non-200 ten times over about 10.5 hours, allows two minutes per
+   * attempt, and stops immediately on 403. Each outcome is mapped to the
+   * behaviour we actually want:
+   *
+   *   200  A decision was reached and the mail is safely recorded — parsed,
+   *        unparsed, duplicate or ignored. Nothing to retry.
+   *
+   *   403  The payload is not a readable email and never will be. Postmark
+   *        stops at once rather than redelivering rubbish ten times, and the
+   *        message still surfaces on its Inbound errors page.
+   *
+   *   500  Something on OUR side failed — the database was unreachable, say.
+   *        The email is fine and a later attempt will probably work, so we ask
+   *        for the retry. An earlier version answered 200 here, which threw
+   *        away Postmark's safety net: a momentary database blip would have
+   *        silently lost a transaction, and missing spend is the one failure an
+   *        expense tracker must never hide. The two-minute timeout also means a
+   *        cold start on a sleeping free-tier host is comfortably survivable.
    */
   ingest = async (req: Request, res: Response): Promise<void> => {
     try {
       res.status(200).json(await this.service.ingest(req.body));
     } catch (error) {
-      const status = (error as { statusCode?: number }).statusCode ?? 500;
+      const status = (error as { statusCode?: number }).statusCode;
+
       if (status === 422) {
-        res.status(422).json({ message: (error as Error).message });
+        // Permanent: tell Postmark to stop rather than burn ten retries.
+        res.status(403).json({ message: (error as Error).message });
         return;
       }
+
       console.error('Inbound email ingest failed', error);
-      // Deliberately 200: the provider cannot fix a server-side failure by
-      // resending, and the raw mail is already stored if it got that far.
-      res.status(200).json({ status: 'error', reason: 'Processing failed; logged for review' });
+      res.status(500).json({ status: 'error', reason: 'Processing failed; please retry' });
     }
   };
 }
