@@ -47,6 +47,19 @@ const CASES: Expectation[] = [
     balance: 19690.63,
     narrationContains: 'Chidi Example',
   },
+  {
+    file: 'alert-wema-debit-forwarded.txt',
+    note: "manually forwarded through Gmail, which renders every label as *bold*",
+    type: 'debit',
+    amount: 1000,
+    reference: 'S99000001',
+    date: '2026-10-08',
+    balance: 4210.75,
+    // The bug this fixture exists for: the asterisk closing "*Description*"
+    // ended the capture, so the narration arrived as a bare "*" and the
+    // expense was filed with no description at all.
+    narrationContains: 'ALAT NIP TRANSFER',
+  },
 ];
 
 const FIXTURES = path.join(__dirname, '..', 'src', 'modules', 'integrations', '__fixtures__');

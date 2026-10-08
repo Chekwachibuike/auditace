@@ -1,0 +1,60 @@
+---------- Forwarded message ---------
+From: WEMA ALERT <wemaalert@wemabank.com>
+Date: Thu, Oct 8, 2026 at 2:13 PM
+Subject: Your WEMA Account Has Been Debited
+To: Bank Customer <customer@example.com>
+
+08-10-2026 14:13:23
+
+*Dear ADA EXAMPLE CUSTOMER*
+
+We wish to inform you that a *Debit* transaction recently occurred on your
+bank account.
+
+Please find below details of the transaction:
+
+*Transaction Details - Debit*
+
+*Account Number*
+
+:
+
+0100****99
+
+*Account Name*
+
+:
+
+ADA EXAMPLE CUSTOMER
+
+*Description*
+
+:
+
+ALAT NIP TRANSFER TO ADA EXAMPLE CUSTOMER F
+
+*Reference Number*
+
+:
+
+S99000001
+
+*Transaction Amount*
+
+:
+
+1,000.00 NGN
+
+*Transaction Date & Time:*
+
+:
+
+08-10-2026 14:13:23
+
+*Value Date:*
+
+:
+
+08-10-2026
+
+Current Balance as at 08-10-2026 14:13:23      :             * 4,210.75 NGN*
