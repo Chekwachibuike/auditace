@@ -90,8 +90,18 @@ export function parseDate(raw: string | undefined | null, fallback: Date): Date 
 }
 
 /** Collapse whitespace and trim — alert bodies are full of table padding. */
+const EDGE_STARS_LEADING = new RegExp('^[*\\s]+');
+const EDGE_STARS_TRAILING = new RegExp('[*\\s]+$');
+
+function stripEdgeStars(value: string): string {
+  return value.replace(EDGE_STARS_LEADING, '').replace(EDGE_STARS_TRAILING, '');
+}
+
 export function tidy(value: string | undefined | null): string {
-  return (value ?? '').replace(/\s+/g, ' ').trim();
+  // Gmail turns HTML <b> into *bold* when it renders an alert as plain
+  // text, so a forwarded alert carries asterisks the original never had.
+  // Trimmed only at the edges, so an asterisk inside a narration survives.
+  return stripEdgeStars(value ?? '').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -126,10 +136,14 @@ export function detectType(text: string): 'debit' | 'credit' | null {
 export function field(text: string, labels: string[]): string | null {
   for (const label of labels) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // The separator class includes '*' because Gmail's plain-text rendering
+    // wraps each label in asterisks ("*Description*" then ":" then the value
+    // on a later line). Without it the capture stopped on the label's own
+    // closing asterisk, and every forwarded WEMA narration arrived as "*".
     // \b so a short alias like "Amount" or "Ref" cannot match inside another
     // word. It still matches the tail of a longer label ("Transaction Amount"),
     // which is wanted — that is the same field.
-    const match = new RegExp('\\b' + escaped + '[\\s:]*([^\\n\\t]+)', 'i').exec(text);
+    const match = new RegExp('\\b' + escaped + '[\\s:*]*([^\\n\\t]+)', 'i').exec(text);
     const value = tidy(match?.[1]);
     if (value) return value;
   }
