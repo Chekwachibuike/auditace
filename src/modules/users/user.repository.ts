@@ -55,4 +55,13 @@ export class UserRepository {
       createdAt: user.createdAt
     };
   }
+
+  /**
+   * Removes the user row. Dependent rows go with it via ON DELETE CASCADE on
+   * every userId foreign key, so this one statement is the whole deletion —
+   * see the note in UserService.deleteAccount.
+   */
+  async deleteById(id: string): Promise<void> {
+    await prisma.user.delete({ where: { id } });
+  }
 }
