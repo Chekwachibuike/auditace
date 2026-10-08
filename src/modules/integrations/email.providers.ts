@@ -81,8 +81,27 @@ export function normaliseInboundEmail(payload: Payload): NormalisedEmail | null 
   const from = extractAddress(
     firstString(payload, ['from', 'From', 'sender', 'FromFull.Email', 'envelope_from']),
   );
+  /**
+   * ENVELOPE FIRST, headers last. This order is the whole correctness of
+   * routing an inbound mail to an account.
+   *
+   * When Gmail forwards via a filter it leaves the original `To:` header
+   * untouched - it still names the user's own mailbox - and the ingest
+   * address appears only on the SMTP envelope (Postmark reports that as
+   * OriginalRecipient). Reading the header first meant every auto-forwarded
+   * alert resolved to the user's own address, carried no token, and was
+   * dropped with "Recipient is not an ingest address" - a 200, no row, no
+   * error, no trace. A MANUALLY forwarded alert worked, because the address
+   * had been typed into `To:` by hand, which is exactly the kind of
+   * coincidence that makes a bug look like a configuration problem and sends
+   * you off rebuilding mail filters for an afternoon.
+   *
+   * The envelope is what actually routed the message, so it is the only
+   * trustworthy answer to "who was this for". Headers stay as a last resort
+   * for providers that report nothing else.
+   */
   const to = extractAddress(
-    firstString(payload, ['to', 'To', 'recipient', 'OriginalRecipient', 'envelope_to']),
+    firstString(payload, ['OriginalRecipient', 'envelope_to', 'recipient', 'to', 'To']),
   );
 
   if (!from || !to) return null;
