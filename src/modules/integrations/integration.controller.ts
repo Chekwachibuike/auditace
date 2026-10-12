@@ -67,15 +67,31 @@ export class IntegrationController {
     res.status(200).json({ pending });
   };
 
+  /**
+   * Files the transaction on the side its direction dictates: a debit creates
+   * an expense, a credit creates income. The response body is whichever
+   * record was created, so the client should read the status code and its own
+   * knowledge of the row's direction rather than guessing from the shape.
+   */
   acceptTransaction = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     if (!req.user) throw new UnauthorizedError('User not authenticated');
 
-    const expense = await this.integrationService.acceptTransaction(req.user.id, req.params.id, {
+    const created = await this.integrationService.acceptTransaction(req.user.id, req.params.id, {
       category: req.body.category,
       description: req.body.description,
       amount: req.body.amount,
     });
-    res.status(201).json(expense);
+    res.status(201).json(created);
+  };
+
+  markTransactionAsTransfer = async (
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> => {
+    if (!req.user) throw new UnauthorizedError('User not authenticated');
+
+    const transaction = await this.integrationService.markAsTransfer(req.user.id, req.params.id);
+    res.status(200).json(transaction);
   };
 
   ignoreTransaction = async (req: AuthenticatedRequest, res: Response): Promise<void> => {

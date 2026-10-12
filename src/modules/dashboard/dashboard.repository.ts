@@ -129,30 +129,45 @@ export class DashboardRepository {
   }
 
   async getDashboardOverview(userId: string): Promise<DashboardOverview> {
+    /**
+     * Month bounds in UTC, as a half-open range.
+     *
+     * Dates are stored at UTC midnight standing for a calendar day, so the
+     * window has to be built the same way. The previous version used
+     * `new Date(y, m, 1)` and `new Date(y, m + 1, 0)` - LOCAL midnight - with
+     * an inclusive upper bound. In any timezone ahead of UTC that upper bound
+     * lands BEFORE the last day's UTC midnight, so the final day of every
+     * month was quietly missing from the current-month totals. In WAT (UTC+1)
+     * that is one day of spending in twelve, absent from the headline figure
+     * with nothing to indicate it.
+     *
+     * `lt` the first instant of next month has no such edge: it needs no
+     * knowledge of month length, and leap years and 30-day months fall out of
+     * it for free.
+     */
     const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const thisMonth = { gte: monthStart, lt: nextMonthStart };
 
-    const [allExpenses, currentMonthExpenses] = await Promise.all([
-      prisma.expense.findMany({
-        where: { userId },
-      }),
-      prisma.expense.findMany({
-        where: {
-          userId,
-          date: {
-            gte: currentMonthStart,
-            lte: currentMonthEnd,
-          },
-        },
-      }),
+    const [allExpenses, currentMonthExpenses, allIncome, currentMonthIncome] = await Promise.all([
+      prisma.expense.findMany({ where: { userId } }),
+      prisma.expense.findMany({ where: { userId, date: thisMonth } }),
+      prisma.income.findMany({ where: { userId } }),
+      prisma.income.findMany({ where: { userId, date: thisMonth } }),
     ]);
 
-    const totalSpent = allExpenses.reduce((sum: number, expense: any) => sum + expense.amount, 0);
-    const currentMonthSpent = currentMonthExpenses.reduce((sum: number, expense: any) => sum + expense.amount, 0);
+    const sum = (rows: { amount: number }[]) => rows.reduce((total, row) => total + row.amount, 0);
 
-    // Calculate average monthly expense
-    const uniqueMonths = new Set(allExpenses.map((expense: any) => expense.date.toISOString().slice(0, 7)));
+    const totalSpent = sum(allExpenses);
+    const currentMonthSpent = sum(currentMonthExpenses);
+    const totalIncome = sum(allIncome);
+    const currentMonthIncomeTotal = sum(currentMonthIncome);
+
+    // Averaged over months that actually have spending, not over calendar
+    // months since signup: a dormant month would otherwise drag the average
+    // down and make the figure describe nothing in particular.
+    const uniqueMonths = new Set(allExpenses.map((e) => e.date.toISOString().slice(0, 7)));
     const averageMonthlyExpense = uniqueMonths.size > 0 ? totalSpent / uniqueMonths.size : 0;
 
     return {
@@ -161,6 +176,13 @@ export class DashboardRepository {
       averageMonthlyExpense,
       currentMonthSpent,
       currentMonthExpenses: currentMonthExpenses.length,
+
+      totalIncome,
+      totalIncomeRecords: allIncome.length,
+      currentMonthIncome: currentMonthIncomeTotal,
+      currentMonthIncomeRecords: currentMonthIncome.length,
+
+      currentMonthNet: currentMonthIncomeTotal - currentMonthSpent,
     };
   }
 }

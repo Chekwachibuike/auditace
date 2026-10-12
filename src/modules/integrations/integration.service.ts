@@ -176,13 +176,20 @@ export class IntegrationService {
   }
 
   /**
-   * Turn a reviewed transaction into a real expense.
+   * File a reviewed transaction on the correct side of the ledger.
    *
-   * Credits are refused outright. A bank feed carries salary, refunds and
-   * transfers between the user's own accounts; accepting one as an expense
-   * would inflate every total, budget and chart in the app. If someone really
-   * wants to record a credit they can add an expense by hand — that is a
-   * deliberate act rather than an accident of import.
+   * THE DIRECTION OF THE ALERT DECIDES, not the caller. A debit becomes an
+   * expense and a credit becomes income; there is no parameter to override
+   * that, because a caller that could put a credit in the expenses table is a
+   * caller that will eventually do it by accident, and the resulting figure
+   * looks entirely plausible on screen.
+   *
+   * What the caller DOES choose is the classification - a spending category
+   * for a debit, a source such as Salary or Refund for a credit - which is the
+   * one thing a bank alert genuinely cannot know.
+   *
+   * Transfers between the user's own accounts belong on NEITHER side and are
+   * handled by markAsTransfer instead.
    */
   async acceptTransaction(
     userId: string,
@@ -193,11 +200,11 @@ export class IntegrationService {
     if (!txn) throw new NotFoundError('Imported transaction not found');
 
     if (txn.status === 'accepted') {
-      throw new ConflictError('That transaction has already been added to your expenses.');
+      throw new ConflictError('That transaction has already been filed.');
     }
 
-    if (txn.type !== 'debit') {
-      throw new AppError('Only money leaving the account can become an expense.');
+    if (txn.type !== 'debit' && txn.type !== 'credit') {
+      throw new AppError('That transaction has no usable direction.');
     }
 
     const amount = overrides.amount ?? txn.amount;
@@ -205,12 +212,38 @@ export class IntegrationService {
       throw new AppError('Amount must be greater than 0');
     }
 
-    return this.repository.acceptTransaction(importedId, userId, {
+    const record = {
       amount,
       description: overrides.description?.trim() || txn.narration,
       category: overrides.category.trim(),
       date: txn.date,
-    });
+    };
+
+    return txn.type === 'credit'
+      ? this.repository.acceptTransactionAsIncome(importedId, userId, record)
+      : this.repository.acceptTransaction(importedId, userId, record);
+  }
+
+  /**
+   * Record a row as money moved between the user's own accounts.
+   *
+   * Excluded from spending AND from income. One transfer raises two alerts -
+   * a debit from the sending account and a credit to the receiving one - so
+   * counting them normally adds the same money to both totals. The net stays
+   * right, which is exactly why it goes unnoticed, while every per-month and
+   * per-category figure is overstated.
+   */
+  async markAsTransfer(userId: string, importedId: string) {
+    const txn = await this.repository.findTransaction(importedId, userId);
+    if (!txn) throw new NotFoundError('Imported transaction not found');
+
+    if (txn.status === 'accepted') {
+      throw new ConflictError(
+        'That transaction is already filed. Delete the expense or income it created first.',
+      );
+    }
+
+    return this.repository.markTransactionAsTransfer(importedId);
   }
 
   async ignoreTransaction(userId: string, importedId: string) {
@@ -219,7 +252,7 @@ export class IntegrationService {
 
     if (txn.status === 'accepted') {
       throw new ConflictError(
-        'That transaction is already an expense. Delete the expense instead.',
+        'That transaction is already filed. Delete the expense or income it created instead.',
       );
     }
 

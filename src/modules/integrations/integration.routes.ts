@@ -227,8 +227,14 @@ router.get(
  * @swagger
  * /integrations/mono/transactions/{id}/accept:
  *   post:
- *     summary: Turn an imported transaction into an expense
- *     description: Only debits can be accepted; credits are not spending.
+ *     summary: File an imported transaction as an expense or as income
+ *     description: >
+ *       The direction of the alert decides the side: a debit creates an
+ *       expense, a credit creates income. The request supplies only the
+ *       classification - a spending category for a debit, a source such as
+ *       Salary or Refund for a credit - which is the one thing a bank alert
+ *       cannot know. Money moved between your own accounts belongs on neither
+ *       side; use /transfer for that.
  *     tags: [Integrations]
  *     security:
  *       - bearerAuth: []
@@ -247,6 +253,38 @@ router.post(
   authenticateToken,
   validate(acceptTransactionSchema),
   asyncHandler(integrationController.acceptTransaction),
+);
+
+/**
+ * @swagger
+ * /integrations/mono/transactions/{id}/transfer:
+ *   post:
+ *     summary: Mark a transaction as a movement between your own accounts
+ *     description: >
+ *       Counted as neither spending nor income. A single transfer raises two
+ *       alerts - a debit from the sending account and a credit to the
+ *       receiving one - so filing them normally adds the same money to both
+ *       totals. The net stays correct, which is precisely why the error goes
+ *       unnoticed, while every monthly and per-category figure is overstated.
+ *     tags: [Integrations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: The updated transaction
+ *       409:
+ *         description: Already filed as an expense or income
+ */
+router.post(
+  '/mono/transactions/:id/transfer',
+  authenticateToken,
+  asyncHandler(integrationController.markTransactionAsTransfer),
 );
 
 /**

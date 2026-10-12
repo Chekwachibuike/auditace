@@ -173,6 +173,56 @@ export class IntegrationRepository {
     });
   }
 
+  /**
+   * The credit counterpart. Writes an Income row and links it, in one
+   * transaction, so a failure can never leave a row that is marked accepted
+   * but points at nothing.
+   *
+   * incomeId and expenseId are mutually exclusive by construction: the
+   * direction of the alert decides which branch runs, so one imported
+   * transaction can never appear on both sides of the ledger.
+   */
+  async acceptTransactionAsIncome(
+    importedId: string,
+    userId: string,
+    income: { amount: number; description: string | null; category: string; date: Date },
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const created = await tx.income.create({
+        data: {
+          userId,
+          amount: income.amount,
+          description: income.description,
+          category: income.category,
+          date: income.date,
+          source: 'imported',
+        },
+      });
+
+      await tx.importedTransaction.update({
+        where: { id: importedId },
+        data: { status: 'accepted', incomeId: created.id },
+      });
+
+      return created;
+    });
+  }
+
+  /**
+   * Mark a row as a movement between the user's own accounts.
+   *
+   * Counted on NEITHER side. Moving money from one of your accounts to
+   * another produces a debit alert and a credit alert for the same money;
+   * treating them as spending and income would inflate both totals while
+   * leaving the net correct, which is the most convincing way to be wrong.
+   */
+  async markTransactionAsTransfer(id: string) {
+    return prisma.importedTransaction.update({
+      where: { id },
+      data: { status: 'transfer', expenseId: null, incomeId: null },
+    });
+  }
+
   async countPending(userId: string) {
     return prisma.importedTransaction.count({ where: { userId, status: 'pending' } });
   }

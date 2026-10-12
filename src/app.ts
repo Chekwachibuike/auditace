@@ -7,6 +7,7 @@ import { swaggerSpec, swaggerUiOptions } from './config/swagger';
 import authRoutes from "./modules/auth/auth.routes";
 import userRoutes from "./modules/users/user.routes";
 import expenseRoutes from "./modules/expenses/expense.routes";
+import incomeRoutes from "./modules/income/income.routes";
 import budgetRoutes from "./modules/budgets/budget.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import integrationRoutes from "./modules/integrations/integration.routes";
@@ -177,6 +178,7 @@ app.get("/health", (_req: Request, res: Response) => {
   app.use("/auth", authLimiter, authRoutes);
   app.use("/users", userRoutes);
   app.use("/expenses", expenseRoutes);
+  app.use("/income", incomeRoutes);
   app.use("/budgets", budgetRoutes);
   app.use("/dashboard", dashboardRoutes);
   app.use("/integrations", integrationRoutes);

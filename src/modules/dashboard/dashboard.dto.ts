@@ -28,4 +28,17 @@ export interface DashboardOverview {
   averageMonthlyExpense: number;
   currentMonthSpent: number;
   currentMonthExpenses: number;
+
+  /** Money in. Transfers between the user's own accounts are excluded. */
+  totalIncome: number;
+  totalIncomeRecords: number;
+  currentMonthIncome: number;
+  currentMonthIncomeRecords: number;
+
+  /**
+   * This month's income minus this month's spending. Negative means more went
+   * out than came in, which is the number most people actually want and which
+   * no single-direction figure can express.
+   */
+  currentMonthNet: number;
 }

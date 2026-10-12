@@ -20,6 +20,7 @@ model User {
 
   // Relations for future features
   expenses Expense[]
+  incomes  Income[]
   budgets  Budget[]
 
   /// The opaque token in this user's personal forwarding address
@@ -57,6 +58,40 @@ model Expense {
   importedTransaction ImportedTransaction?
 
   @@map("expenses")
+}
+
+/// Money arriving: salary, refunds, gifts, business income.
+///
+/// A SEPARATE TABLE rather than a direction flag on Expense, deliberately.
+/// Expenses are live data that budgets, the category breakdown and every chart
+/// already read without any notion of direction. Adding a flag would mean each
+/// of those queries needs a filter it does not have today, and a single missed
+/// filter silently doubles a total - the kind of wrong number that looks
+/// plausible and never gets questioned. A new table cannot break what exists.
+///
+/// Mirrors Expense field for field so the two modules stay symmetric:
+/// `category` classifies it (Salary, Refund, Gift) and `source` records
+/// whether a person typed it or it came from a bank alert.
+model Income {
+  id          String   @id @default(cuid())
+  amount      Float
+  description String?
+  category    String
+  date        DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// "manual" when a person entered it, "imported" when it came from a bank
+  /// alert accepted in the review queue.
+  source String @default("manual")
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  importedTransaction ImportedTransaction?
+
+  @@index([userId, date])
+  @@map("incomes")
 }
 
 model Budget {
@@ -168,6 +203,12 @@ model ImportedTransaction {
   /// next sync would import it again as if it were new.
   expenseId String?  @unique
   expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  /// Set when a CREDIT was accepted as income. Exactly one of expenseId and
+  /// incomeId is ever populated: the direction of the alert decides which,
+  /// so a single row can never be counted on both sides of the ledger.
+  incomeId String? @unique
+  income   Income? @relation(fields: [incomeId], references: [id], onDelete: SetNull)
 
   /// Optional: a statement upload or a parsed alert email has no linked
   /// account behind it. Only rows that came from a live connection carry one.
