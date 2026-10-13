@@ -56,6 +56,31 @@ export class UserRepository {
     };
   }
 
+  async updateProfile(
+    id: string,
+    data: { fullName?: string; email?: string },
+  ): Promise<User> {
+    const user = await prisma.user.update({
+      where: { id },
+      data: {
+        ...(data.fullName !== undefined ? { fullName: data.fullName } : {}),
+        ...(data.email !== undefined ? { email: data.email.toLowerCase() } : {}),
+      },
+    });
+
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      passwordHash: user.passwordHash,
+      createdAt: user.createdAt,
+    };
+  }
+
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    await prisma.user.update({ where: { id }, data: { passwordHash } });
+  }
+
   /**
    * Removes the user row. Dependent rows go with it via ON DELETE CASCADE on
    * every userId foreign key, so this one statement is the whole deletion —

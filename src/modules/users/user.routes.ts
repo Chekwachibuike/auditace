@@ -5,7 +5,7 @@ import { validate } from "../../shared/validate";
 import { UserController } from "./user.controller";
 import { UserService } from "./user.service";
 import { UserRepository } from "./user.repository";
-import { deleteAccountSchema } from "./user.validation";
+import { changePasswordSchema, deleteAccountSchema, updateProfileSchema } from "./user.validation";
 
 const router = Router();
 
@@ -95,6 +95,58 @@ router.get("/me", authenticateToken, async (req: AuthenticatedRequest, res: Resp
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
+/**
+ * @swagger
+ * /users/me:
+ *   patch:
+ *     summary: Update your name or email address
+ *     description: >
+ *       Either field may be sent on its own. Changing the EMAIL additionally
+ *       requires the account password, because the email is the login
+ *       identifier - without that check, anyone reaching an unlocked session
+ *       could point the account at an address they control and take it over.
+ *       Changing a display name carries no such risk and asks for nothing.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: The updated profile }
+ *       400: { description: Validation failed, or the password was wrong }
+ *       409: { description: That email address is already in use }
+ */
+router.patch(
+  "/me",
+  authenticateToken,
+  validate(updateProfileSchema),
+  asyncHandler(userController.updateMe)
+);
+
+/**
+ * @swagger
+ * /users/me/password:
+ *   post:
+ *     summary: Change your password
+ *     description: >
+ *       Requires the current password. A token proves a session, not a person,
+ *       and a password change made from a borrowed session would lock out the
+ *       owner rather than the intruder.
+ *
+ *       Existing tokens remain valid: there is no session store to revoke
+ *       against, so anyone already holding a token keeps it until it expires.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       204: { description: Password changed }
+ *       400: { description: The current password was wrong, or the new one was rejected }
+ */
+router.post(
+  "/me/password",
+  authenticateToken,
+  validate(changePasswordSchema),
+  asyncHandler(userController.changePassword)
+);
+
 router.delete(
   "/me",
   authenticateToken,
