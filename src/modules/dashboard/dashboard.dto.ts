@@ -1,8 +1,21 @@
+/**
+ * One month of cashflow.
+ *
+ * Both directions ride in the same object on purpose: a chart that plots money
+ * in against money out needs them aligned to the same months, and two
+ * separately-fetched series would silently disagree whenever one direction had
+ * a month the other did not.
+ */
 export interface MonthlySummary {
   month: string;
   totalSpent: number;
   expenseCount: number;
   averageExpense: number;
+
+  totalIncome: number;
+  incomeCount: number;
+  /** income - spending. Negative means the month ran at a deficit. */
+  net: number;
 }
 
 export interface CategoryBreakdown {

@@ -8,35 +8,55 @@ export class DashboardRepository {
     startDate.setDate(1);
     startDate.setHours(0, 0, 0, 0);
 
-    const expenses = await prisma.expense.findMany({
-      where: {
-        userId,
-        date: {
-          gte: startDate,
-        },
-      },
-      orderBy: {
-        date: 'desc',
-      },
-    });
+    const [expenses, incomes] = await Promise.all([
+      prisma.expense.findMany({ where: { userId, date: { gte: startDate } } }),
+      prisma.income.findMany({ where: { userId, date: { gte: startDate } } }),
+    ]);
 
-    const monthlyData = new Map<string, { total: number; count: number }>();
+    /**
+     * One bucket per month holding BOTH directions.
+     *
+     * A month is created by whichever side sees it first, so a month with
+     * income and no spending still appears - and reads as a surplus rather
+     * than vanishing from the series. Dropping it would make the chart skip a
+     * month silently, which is worse than showing a zero.
+     */
+    interface Bucket {
+      spent: number;
+      expenseCount: number;
+      income: number;
+      incomeCount: number;
+    }
+    const monthlyData = new Map<string, Bucket>();
+    const bucket = (key: string): Bucket => {
+      const existing = monthlyData.get(key);
+      if (existing) return existing;
+      const fresh: Bucket = { spent: 0, expenseCount: 0, income: 0, incomeCount: 0 };
+      monthlyData.set(key, fresh);
+      return fresh;
+    };
 
-    expenses.forEach((expense: any) => {
-      const monthKey = expense.date.toISOString().slice(0, 7); // YYYY-MM
-      const current = monthlyData.get(monthKey) || { total: 0, count: 0 };
-      monthlyData.set(monthKey, {
-        total: current.total + expense.amount,
-        count: current.count + 1,
-      });
-    });
+    for (const expense of expenses) {
+      const b = bucket(expense.date.toISOString().slice(0, 7)); // YYYY-MM
+      b.spent += expense.amount;
+      b.expenseCount += 1;
+    }
+
+    for (const income of incomes) {
+      const b = bucket(income.date.toISOString().slice(0, 7));
+      b.income += income.amount;
+      b.incomeCount += 1;
+    }
 
     return Array.from(monthlyData.entries())
       .map(([month, data]) => ({
         month,
-        totalSpent: data.total,
-        expenseCount: data.count,
-        averageExpense: data.count > 0 ? data.total / data.count : 0,
+        totalSpent: data.spent,
+        expenseCount: data.expenseCount,
+        averageExpense: data.expenseCount > 0 ? data.spent / data.expenseCount : 0,
+        totalIncome: data.income,
+        incomeCount: data.incomeCount,
+        net: data.income - data.spent,
       }))
       .sort((a, b) => b.month.localeCompare(a.month));
   }
