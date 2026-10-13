@@ -77,6 +77,27 @@ function contentHash(from: string, subject: string, text: string): string {
   return 'sha256:' + createHash('sha256').update(`${from}\n${subject}\n${text}`).digest('hex');
 }
 
+/**
+ * The verification link out of a Gmail forwarding confirmation, or null.
+ *
+ * Matches the `vf-` link SPECIFICALLY. Three things in that email look like
+ * the answer and are not:
+ *
+ *   - a `uf-` link, which CANCELS forwarding. Handing that over as "your
+ *     confirmation link" silently undoes the setup it claims to complete.
+ *   - a support URL ending in a nine-digit article id. An earlier attempt read
+ *     the code by scanning for a run of digits and reported that id.
+ *   - the user's own address, quoted in the body.
+ *
+ * The sender is compared as a whole address rather than by substring, so
+ * `forwarding-noreply@google.com.attacker.test` cannot pose as Google.
+ */
+export function extractGmailConfirmationUrl(from: string, text: string): string | null {
+  if (from.trim().toLowerCase() !== 'forwarding-noreply@google.com') return null;
+  const match = /https:\/\/mail-settings\.google\.com\/mail\/vf-[^\s<>")]+/i.exec(text);
+  return match ? match[0] : null;
+}
+
 export function normaliseInboundEmail(payload: Payload): NormalisedEmail | null {
   const from = extractAddress(
     firstString(payload, ['from', 'From', 'sender', 'FromFull.Email', 'envelope_from']),

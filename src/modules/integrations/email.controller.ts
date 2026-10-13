@@ -29,9 +29,10 @@ export class EmailController {
 
   status = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     if (!req.user) throw new UnauthorizedError('User not authenticated');
-    const [address, discarded] = await Promise.all([
+    const [address, discarded, confirmationUrl] = await Promise.all([
       this.service.getIngestAddress(req.user.id),
       this.service.countDiscarded(req.user.id),
+      this.service.pendingConfirmationUrl(req.user.id),
     ]);
     const messages = await this.service.listEmails(req.user.id);
     res.status(200).json({
@@ -40,6 +41,7 @@ export class EmailController {
       parsed: messages.filter((m) => m.status === 'parsed').length,
       unparsed: messages.filter((m) => m.status === 'unparsed').length,
       discarded,
+      confirmationUrl,
     });
   };
 

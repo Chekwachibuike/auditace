@@ -7,7 +7,11 @@
  * says. Getting it wrong is silent: the webhook answers 200, no row is
  * written, and the spend simply never appears.
  */
-import { normaliseInboundEmail, extractIngestToken } from '../src/modules/integrations/email.providers';
+import {
+  normaliseInboundEmail,
+  extractIngestToken,
+  extractGmailConfirmationUrl,
+} from '../src/modules/integrations/email.providers';
 
 /**
  * FABRICATED. Never put a real ingest token in a fixture or a test.
@@ -79,5 +83,33 @@ for (const c of CASES) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${c.name}`);
   if (!ok) console.log(`        got=${got}  want=${c.wantToken}`);
 }
+/* ---- Gmail forwarding confirmation ------------------------------------- */
+// Setting this feature up is impossible without this link, and the privacy
+// guard that protects every other message would otherwise destroy the only
+// copy of it. That happened once already, on a rotated address.
+const VF = 'https://mail-settings.google.com/mail/vf-%5BANGjdJ_sample%5D-0R-token';
+const UF = 'https://mail-settings.google.com/mail/uf-%5BANGjdJ_sample%5D-0R-token';
+const HELP = 'https://support.google.com/mail/bin/answer.py?answer=184973';
+
+const CONFIRM_CASES: [string, string, string, string | null][] = [
+  ['the verify link is found', 'forwarding-noreply@google.com', 'click ' + VF + ' to confirm', VF],
+  // Returning this one would silently UNDO the setup it claims to complete.
+  ['the CANCEL link is never returned', 'forwarding-noreply@google.com', 'to stop, click ' + UF, null],
+  ['verify wins when both are present', 'forwarding-noreply@google.com', UF + ' ... ' + VF, VF],
+  // An earlier approach scanned for a run of digits and reported this
+  // article id as if it were the confirmation code.
+  ['a help-article id is not a code', 'forwarding-noreply@google.com', 'see ' + HELP, null],
+  ['a lookalike sender is refused', 'forwarding-noreply@google.com.attacker.test', VF, null],
+  ['an ordinary bank alert yields nothing', 'wemaalert@wemabank.com', 'Debit NGN 1,000.00', null],
+];
+
+for (const [name, from, text, want] of CONFIRM_CASES) {
+  const got = extractGmailConfirmationUrl(from, text);
+  const ok = got === want;
+  if (!ok) failures += 1;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`);
+  if (!ok) console.log(`        got=${got}  want=${want}`);
+}
+
 console.log(failures === 0 ? '\nALL ROUTING CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

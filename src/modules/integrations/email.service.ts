@@ -2,7 +2,11 @@ import { randomBytes } from 'crypto';
 import { prisma } from '../../database/prisma';
 import { IntegrationRepository } from './integration.repository';
 import { BANK_PARSERS, dispatch } from './email.parsers';
-import { extractIngestToken, normaliseInboundEmail } from './email.providers';
+import {
+  extractGmailConfirmationUrl,
+  extractIngestToken,
+  normaliseInboundEmail,
+} from './email.providers';
 import { AppError, NotFoundError } from '../../shared/AppError';
 import type { IngestResult, NormalisedEmail } from './email.types';
 
@@ -170,6 +174,41 @@ export class EmailIngestService {
     // else is recorded as `discarded` with its sender and subject but NO body,
     // which keeps enough to warn the user that their filter is too broad while
     // retaining nothing private.
+    /**
+     * Gmail's forwarding confirmation is the ONE non-bank email that has to
+     * survive the privacy guard.
+     *
+     * Setting this feature up requires clicking a link that Gmail sends to the
+     * ingest address and nowhere else. The guard below correctly classes it as
+     * "not a bank alert" and drops the body - which destroys the only copy of
+     * the link and leaves the user unable to finish setup, with no indication
+     * why. That is exactly what happened: a rotated address could not be
+     * verified because the confirmation had already been discarded.
+     *
+     * Only the LINK is kept, not the message. That is stricter than the guard
+     * it bypasses, not looser: the rest of the body - which names the account
+     * and quotes Google's boilerplate - is still thrown away.
+     */
+    const confirmationUrl = extractGmailConfirmationUrl(email.from, email.text);
+    if (confirmationUrl) {
+      await prisma.inboundEmail.create({
+        data: {
+          userId,
+          messageId: email.messageId,
+          fromAddress: email.from,
+          toAddress: email.to,
+          subject: email.subject,
+          receivedAt: email.receivedAt,
+          bodyText: confirmationUrl,
+          status: 'confirmation',
+        },
+      });
+      return {
+        status: 'ignored',
+        reason: 'Gmail forwarding confirmation saved. Open Settings to confirm.',
+      };
+    }
+
     const senderIsKnown =
       (await prisma.inboundEmail.count({
         where: { userId, fromAddress: email.from, status: 'parsed' },
@@ -303,6 +342,23 @@ export class EmailIngestService {
    * The UI uses this to say "your Gmail filter looks too broad" — the single
    * most likely setup mistake, and invisible otherwise.
    */
+  /**
+   * The newest unused Gmail confirmation link, if one is waiting.
+   *
+   * Surfaced through the status endpoint so the person can finish setup from
+   * the Settings screen. Before this existed the link lived only in the
+   * database and someone had to go and read it out of a table, which is not a
+   * thing a user can do.
+   */
+  async pendingConfirmationUrl(userId: string): Promise<string | null> {
+    const row = await prisma.inboundEmail.findFirst({
+      where: { userId, status: 'confirmation' },
+      orderBy: { receivedAt: 'desc' },
+      select: { bodyText: true },
+    });
+    return row?.bodyText || null;
+  }
+
   async countDiscarded(userId: string) {
     return prisma.inboundEmail.count({ where: { userId, status: 'discarded' } });
   }
