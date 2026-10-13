@@ -160,13 +160,28 @@ export class DashboardRepository {
    * the next real alert restates the true balance.
    */
   async getBalances(userId: string): Promise<BalanceSummary> {
+    /**
+     * Every alert, not only the ones carrying a balance. The movement totals
+     * below must count a transaction whose alert omitted the balance - the
+     * money still moved - while the balance itself can only come from a row
+     * that stated one.
+     */
     const rows = await prisma.importedTransaction.findMany({
-      where: { userId, balance: { not: null } },
+      where: { userId },
       orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
-      select: { account: true, balance: true, currency: true, date: true },
+      select: { account: true, balance: true, currency: true, date: true, type: true, amount: true },
     });
 
-    const latest = new Map<string, { balance: number; currency: string; date: Date; count: number }>();
+    interface Acc {
+      balance: number | null;
+      currency: string;
+      date: Date | null;
+      count: number;
+      moneyIn: number;
+      moneyOut: number;
+    }
+
+    const latest = new Map<string, Acc>();
     let unattributed = 0;
 
     for (const row of rows) {
@@ -174,22 +189,37 @@ export class DashboardRepository {
         unattributed += 1;
         continue;
       }
-      const existing = latest.get(row.account);
-      latest.set(row.account, {
-        balance: row.balance as number,
-        currency: row.currency,
-        date: row.date,
-        count: (existing?.count ?? 0) + 1,
-      });
+      const acc =
+        latest.get(row.account) ??
+        { balance: null, currency: row.currency, date: null, count: 0, moneyIn: 0, moneyOut: 0 };
+
+      // Movement counts EVERY alert, whatever it was later filed as.
+      if (row.type === 'credit') acc.moneyIn += row.amount;
+      else acc.moneyOut += row.amount;
+
+      // The balance only advances on a row that actually stated one.
+      if (row.balance !== null) {
+        acc.balance = row.balance;
+        acc.date = row.date;
+      }
+
+      acc.currency = row.currency;
+      acc.count += 1;
+      latest.set(row.account, acc);
     }
 
+    const round = (n: number) => Math.round(n * 100) / 100;
+
     const accounts: AccountBalance[] = [...latest.entries()]
+      .filter(([, data]) => data.balance !== null)
       .map(([account, data]) => ({
         account,
-        balance: data.balance,
+        balance: data.balance as number,
         currency: data.currency,
-        asOf: data.date.toISOString(),
+        asOf: (data.date as Date).toISOString(),
         transactions: data.count,
+        moneyIn: round(data.moneyIn),
+        moneyOut: round(data.moneyOut),
       }))
       .sort((a, b) => b.balance - a.balance);
 

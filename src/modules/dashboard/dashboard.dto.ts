@@ -45,6 +45,19 @@ export interface AccountBalance {
   asOf: string;
   /** How many alerts we have seen for this account. */
   transactions: number;
+
+  /**
+   * Everything that moved, INCLUDING transfers.
+   *
+   * A second question from the same data, and a different one from income and
+   * spending. "Did I get richer" excludes money shuffled between accounts you
+   * already own; "what went through this account" must include it, because it
+   * genuinely did pass through. Classifying a credit as a transfer therefore
+   * removes it from income and leaves these untouched - nothing disappears by
+   * being filed correctly.
+   */
+  moneyIn: number;
+  moneyOut: number;
 }
 
 /**
