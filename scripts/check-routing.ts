@@ -9,6 +9,15 @@
  */
 import { normaliseInboundEmail, extractIngestToken } from '../src/modules/integrations/email.providers';
 
+/**
+ * FABRICATED. Never put a real ingest token in a fixture or a test.
+ *
+ * The address is a bearer credential: anyone holding it can post bank alerts
+ * into that account's review queue. An earlier version of this file carried a
+ * live one, which is how it ended up in a public repository - a test file
+ * reads as throwaway, so the value in it never gets a second look. The shape
+ * is all these checks need.
+ */
 const TOKEN = '0000000000000000000000000000beef';
 const INGEST = 'exampleserver+' + TOKEN + '@inbound.postmarkapp.com';
 
