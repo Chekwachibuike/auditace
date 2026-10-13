@@ -94,6 +94,14 @@ export interface NormalisedTransaction {
   type: 'debit' | 'credit';
   date: Date;
   balance: number | null;
+  /**
+   * Masked account the balance belongs to, when the source states it.
+   *
+   * A balance without an account is not just less useful, it is misleading:
+   * with two banks the newest row's balance is whichever account moved last,
+   * and reading it as "my money" is wrong by the size of the other account.
+   */
+  account: string | null;
   suggestedCategory: string | null;
 }
 

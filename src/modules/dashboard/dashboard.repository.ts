@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma';
-import { MonthlySummary, CategoryBreakdown, BudgetComparison, DashboardOverview } from './dashboard.dto';
+import { MonthlySummary, CategoryBreakdown, BudgetComparison, DashboardOverview, AccountBalance, BalanceSummary } from './dashboard.dto';
 
 export class DashboardRepository {
   async getMonthlySummaries(userId: string, months: number = 12): Promise<MonthlySummary[]> {
@@ -146,6 +146,69 @@ export class DashboardRepository {
     }
 
     return comparisons.sort((a, b) => b.percentageUsed - a.percentageUsed);
+  }
+
+  /**
+   * The latest bank-stated balance per account.
+   *
+   * Ordering is by date then createdAt. `date` is only day-granular - the
+   * alerts state a time but a transaction date is a calendar day - so several
+   * movements on one day tie, and ingestion order breaks the tie. That is an
+   * approximation worth naming: if a backlog of alerts is forwarded out of
+   * order, the newest row by ingestion is not necessarily the latest
+   * transaction. It is the best available signal, and it is self-correcting -
+   * the next real alert restates the true balance.
+   */
+  async getBalances(userId: string): Promise<BalanceSummary> {
+    const rows = await prisma.importedTransaction.findMany({
+      where: { userId, balance: { not: null } },
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+      select: { account: true, balance: true, currency: true, date: true },
+    });
+
+    const latest = new Map<string, { balance: number; currency: string; date: Date; count: number }>();
+    let unattributed = 0;
+
+    for (const row of rows) {
+      if (!row.account) {
+        unattributed += 1;
+        continue;
+      }
+      const existing = latest.get(row.account);
+      latest.set(row.account, {
+        balance: row.balance as number,
+        currency: row.currency,
+        date: row.date,
+        count: (existing?.count ?? 0) + 1,
+      });
+    }
+
+    const accounts: AccountBalance[] = [...latest.entries()]
+      .map(([account, data]) => ({
+        account,
+        balance: data.balance,
+        currency: data.currency,
+        asOf: data.date.toISOString(),
+        transactions: data.count,
+      }))
+      .sort((a, b) => b.balance - a.balance);
+
+    return {
+      // Rounded to the kobo. Summing floats produces dust - two balances that
+      // are exact to two places add up to 82742.98000000001 - and a currency
+      // figure carrying fourteen decimals undermines confidence in a number
+      // whose entire job is to be trusted.
+      total: Math.round(accounts.reduce((sum, a) => sum + a.balance, 0) * 100) / 100,
+      currency: accounts[0]?.currency ?? 'NGN',
+      // The OLDEST asOf, not the newest: the total is only as current as its
+      // stalest component, and reporting the freshest would overstate how
+      // much of this figure is actually up to date.
+      asOf: accounts.length
+        ? accounts.map((a) => a.asOf).sort()[0]
+        : null,
+      accounts,
+      unattributed,
+    };
   }
 
   async getDashboardOverview(userId: string): Promise<DashboardOverview> {

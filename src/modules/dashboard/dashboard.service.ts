@@ -1,5 +1,5 @@
 import { DashboardRepository } from './dashboard.repository';
-import { MonthlySummary, CategoryBreakdown, BudgetComparison, DashboardOverview } from './dashboard.dto';
+import { MonthlySummary, CategoryBreakdown, BudgetComparison, DashboardOverview, AccountBalance, BalanceSummary } from './dashboard.dto';
 
 export class DashboardService {
   constructor(private dashboardRepository: DashboardRepository) {}
@@ -36,5 +36,9 @@ export class DashboardService {
 
   async getDashboardOverview(userId: string): Promise<DashboardOverview> {
     return this.dashboardRepository.getDashboardOverview(userId);
+  }
+
+  async getBalances(userId: string): Promise<BalanceSummary> {
+    return this.dashboardRepository.getBalances(userId);
   }
 }

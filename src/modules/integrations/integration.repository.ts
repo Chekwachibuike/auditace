@@ -86,6 +86,7 @@ export class IntegrationRepository {
         type: txn.type,
         date: txn.date,
         balance: txn.balance,
+        account: txn.account,
         suggestedCategory: txn.suggestedCategory,
       })),
       skipDuplicates: true,

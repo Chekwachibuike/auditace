@@ -260,6 +260,7 @@ export class EmailIngestService {
         type: alert.type,
         date: alert.date,
         balance: alert.balanceAfter ?? null,
+        account: alert.account ?? null,
         suggestedCategory: null,
       },
     ]);

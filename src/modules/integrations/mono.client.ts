@@ -212,6 +212,11 @@ export function normaliseTransaction(raw: MonoTransaction): NormalisedTransactio
       typeof raw.balance === 'number' && Number.isFinite(raw.balance)
         ? Math.round(raw.balance) / MINOR_UNITS_PER_MAJOR
         : null,
+    // null, not a guess. A Mono row already knows which account it belongs to
+    // through linkedAccountId, which is a stronger identifier than a masked
+    // number; this field exists for sources like email alerts that have
+    // nothing but the mask.
+    account: null,
     suggestedCategory: raw.category ?? null,
   };
 }

@@ -190,6 +190,19 @@ model ImportedTransaction {
   date    DateTime
   balance Float?
 
+  /// Masked account identifier as the alert states it ("0432****10").
+  ///
+  /// Without this a balance is unusable. A person with two banks gets two
+  /// interleaved streams of alerts, each carrying ITS OWN running balance, and
+  /// the newest row tells you nothing about how much money exists in total -
+  /// it is whichever account happened to move last. The parser has always
+  /// extracted this; it simply had nowhere to go.
+  ///
+  /// Masked on purpose. It only has to be STABLE enough to group a stream of
+  /// alerts, which the last four digits are; a full account number would make
+  /// this table worth stealing and buys nothing.
+  account String?
+
   /// A category suggested by the source, when it offers one (Mono's
   /// categorisation, for instance). Null until/unless that resolves, so never
   /// assume it is present.

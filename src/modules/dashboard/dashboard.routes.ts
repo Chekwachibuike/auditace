@@ -192,4 +192,30 @@ router.get('/budget-comparisons', authenticateToken, asyncHandler(dashboardContr
  */
 router.get('/overview', authenticateToken, asyncHandler(dashboardController.getDashboardOverview));
 
+/**
+ * @swagger
+ * /dashboard/balances:
+ *   get:
+ *     summary: What the user currently has, per account
+ *     description: >
+ *       The balance each bank stated in its most recent alert, summed across
+ *       accounts. REPORTED, not computed: this is the bank's own figure, not a
+ *       running total of imported transactions. A derived total drifts from
+ *       reality the moment anything happens without an alert - cash, a
+ *       transfer at a branch, a bank fee - and is then confidently wrong,
+ *       whereas a reported one is merely out of date and says so via asOf.
+ *
+ *       asOf is the OLDEST timestamp among the accounts, because the total is
+ *       only as current as its stalest part.
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Balance per account plus the total
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/balances', authenticateToken, asyncHandler(dashboardController.getBalances));
+
 export default router;

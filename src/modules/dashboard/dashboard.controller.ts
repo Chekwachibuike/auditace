@@ -39,4 +39,10 @@ export class DashboardController {
 
     res.status(200).json(overview);
   };
+
+  getBalances = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    if (!req.user) throw new UnauthorizedError('User not authenticated');
+
+    res.status(200).json(await this.dashboardService.getBalances(req.user.id));
+  };
 }
